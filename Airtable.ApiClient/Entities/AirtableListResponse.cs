@@ -1,10 +1,10 @@
 ﻿using System.Collections.Generic;
 
-namespace Airtable.ApiClient.Attributes
+namespace Airtable.ApiClient.Entities
 {
     internal class AirtableListResponse
     {
-        public List<AirtableRecord> Records { get; }
-        public string Offset { get; }
+        public List<AirtableRecord>? Records { get; }
+        public string? Offset { get; }
     }
 }

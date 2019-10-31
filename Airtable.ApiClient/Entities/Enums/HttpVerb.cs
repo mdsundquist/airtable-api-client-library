@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Airtable.ApiClient.Attributes
+﻿namespace Airtable.ApiClient.Entities
 {
     internal enum HttpVerb
     {

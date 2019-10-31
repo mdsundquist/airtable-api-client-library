@@ -8,9 +8,9 @@ namespace Airtable.ApiClient.Attributes
     internal sealed class RequiredIfAttribute : ValidationAttribute
     {
         internal string PropertyName { get; }
-        internal object RequiredValue { get; }
+        internal object? RequiredValue { get; }
 
-        internal RequiredIfAttribute(string propertyName, object value)
+        internal RequiredIfAttribute(string propertyName, object? value)
         {
             PropertyName = propertyName;
             RequiredValue = value;

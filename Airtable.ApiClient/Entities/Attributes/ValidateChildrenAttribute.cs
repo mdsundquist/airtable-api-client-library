@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Text;
-
-namespace Airtable.ApiClient.Attributes
+﻿namespace Airtable.ApiClient.Entities
 {
     //[AttributeUsage(AttributeTargets.All, AllowMultiple = false)]
     //internal sealed class ValidateChildrenAttribute : ValidationAttribute

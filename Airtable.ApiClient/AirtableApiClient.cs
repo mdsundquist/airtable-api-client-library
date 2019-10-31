@@ -1,10 +1,11 @@
 ﻿using Airtable.ApiClient.Attributes;
+using Airtable.ApiClient.Entities;
 using Airtable.ApiClient.Extensions;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,7 +13,7 @@ using System.Threading.Tasks;
 namespace Airtable.ApiClient
 {
     /// <summary>
-    ///     A .NET Standard 2.0 client library for making Airtable API (v0) calls using C# objects
+    ///     A .NET Standard 2.1 client library for making Airtable API (v0) calls using C# objects
     /// </summary>
     public class AirtableApiClient
     {
@@ -27,34 +28,35 @@ namespace Airtable.ApiClient
             this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
 
         #region ======= GET methods =======
-        public async Task<AirtableRecord> Retrieve(string table,
-                                                   string id,
-                                                   string[] attachmentFields = null,
-                                                   string[] barcodeFields = null,
-                                                   string[] collaboratorFields = null)
+        [return: MaybeNull]
+        public async Task<AirtableRecord> Retrieve(string table, string recordId) => 
+            await this.Retrieve(table, recordId, null)!.ConfigureAwait(false);
+
+        [return: MaybeNull]
+        public async Task<AirtableRecord> Retrieve(string table, string id, 
+            IEnumerable<(AirtableFieldValuePoco ObjectType, string[] FieldNames)>? conversionPairs)
         {
             if (String.IsNullOrEmpty(table)) throw new ArgumentNullException(nameof(table));
             if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
 
-            AirtableRecord result = (await BuildAirTableApiRequest<AirtableRecord>(HttpVerb.GET, $"{table}/{id}").ConfigureAwait(false)).Single();
+            AirtableRecord resultRecord =
+                (await BuildAirTableApiRequest<AirtableRecord>(HttpVerb.GET, $"{table}/{id}").ConfigureAwait(false)).Single();
 
-            return ConvertAirtableFieldsValueObjects(result, attachmentFields, barcodeFields, collaboratorFields);
+            return ConvertAirtableFieldValuesToPocos(resultRecord, conversionPairs)!;
         }
 
         public async Task<List<AirtableRecord>> List(string table,
-                                                     string[] fields = null,
-                                                     string filterFormula = null,
+                                                     string[]? fields = null,
+                                                     string? filterFormula = null,
                                                      int? maxRecords = null,
                                                      int? pageSize = null,
-                                                     dynamic[] sort = null,
-                                                     string view = null,
-                                                     string cellFormat = null,
-                                                     string timeZone = null,
-                                                     string userLocale = null,
-                                                     string offset = null,
-                                                     string[] attachmentFields = null,
-                                                     string[] barcodeFields = null,
-                                                     string[] collaboratorFields = null)
+                                                     dynamic[]? sort = null,
+                                                     string? view = null,
+                                                     string? cellFormat = null,
+                                                     string? timeZone = null,
+                                                     string? userLocale = null,
+                                                     string? offset = null,
+                                                     IEnumerable<(AirtableFieldValuePoco ObjectType, string[] FieldNames)>? conversionPairs = null)
         {
             if (String.IsNullOrEmpty(table)) throw new ArgumentNullException(nameof(table), "table parameter cannot be null or empty");
 
@@ -71,9 +73,15 @@ namespace Airtable.ApiClient
                 AirtableListResponse listResponse = (await BuildAirTableApiRequest<AirtableListResponse>(
                     HttpVerb.GET, requestUri.Uri.PathAndQuery).ConfigureAwait(false)).Single();
 
-                List<AirtableRecord> recordsReceived = listResponse.Records;
-                recordsReceived = ConvertAirtableFieldsValueObjects(recordsReceived, attachmentFields, barcodeFields, collaboratorFields);
-                recordList.AddRange(recordsReceived);
+                List<AirtableRecord>? recordsReceived = listResponse.Records;
+
+                if (recordsReceived?.Any() == true)
+                {
+                    if (conversionPairs?.Any() == true)
+                        recordsReceived = ConvertAirtableFieldValuesToPocos(recordsReceived, conversionPairs);
+
+                    recordList.AddRange(recordsReceived);
+                }
                 offset = listResponse.Offset;
 
             } while (!String.IsNullOrEmpty(offset));
@@ -117,9 +125,13 @@ namespace Airtable.ApiClient
         #endregion ======= PUT methods =======
 
         #region ======= PATCH methods =======
+        [return: MaybeNull]
         public async Task<AirtableRecord> Patch(string table, AirtableRecord newRecord, AirtableRecord oldRecord)
         {
-            if (newRecord.Equals(oldRecord)) return null;
+            if (newRecord is null)
+                throw new ArgumentNullException(nameof(newRecord));
+
+            if (newRecord.Equals(oldRecord)) return null!;
 
             var records = new List<(AirtableRecord NewRecord, AirtableRecord OldRecord)> { (newRecord, oldRecord) };
 
@@ -185,10 +197,12 @@ namespace Airtable.ApiClient
         #endregion ======= DELETE methods =======
 
         #region ======= Private methods =======
-        private async Task<List<T>> BuildAirTableApiRequest<T>(HttpVerb httpVerb, string requestUri, IEnumerable<object> requestBodyData = null) =>
+        private async Task<List<T>> BuildAirTableApiRequest<T>(HttpVerb httpVerb, string requestUri, IEnumerable<object>? requestBodyData = null) =>
             await BuildAirTableApiRequest<T>(httpVerb, new string[] { requestUri }, requestBodyData).ConfigureAwait(false);
 
-        private async Task<List<T>> BuildAirTableApiRequest<T>(HttpVerb httpVerb, IEnumerable<string> requestUris, IEnumerable<object> requestBodyData = null)
+        private async Task<List<T>> BuildAirTableApiRequest<T>(HttpVerb httpVerb,
+            IEnumerable<string> requestUris,
+            IEnumerable<object>? requestBodyData = null)
         {
             bool useRequestBody = httpVerb.HasAttribute<UseRequestBodyAttribute>();
             if (useRequestBody && requestBodyData == null)
@@ -243,10 +257,10 @@ namespace Airtable.ApiClient
             return returnList;
         }
 
-        private async Task<HttpResponseMessage> SendAirtableApiRequest(HttpVerb httpVerb, string requestUri, object requestData = null)
+        private async Task<HttpResponseMessage> SendAirtableApiRequest(HttpVerb httpVerb, string requestUri, object? requestData = null)
         {
             string requestDataJson = JsonConvert.SerializeObject(requestData);
-            var request = new HttpRequestMessage // disposed by SendAsync
+            using var request = new HttpRequestMessage // should be disposed by SendAsync
             {
                 Method = new HttpMethod(httpVerb.ToString()),
                 RequestUri = new Uri(requestUri),
@@ -261,86 +275,119 @@ namespace Airtable.ApiClient
 
         private (string, IEnumerable<T>) CreateRequestBodyObject<T>(IEnumerable<T> requestItems) => ("records", requestItems);
 
-        private string BuildListQueryUriParameters(string[] fields,
-                                                   string filterFormula,
+        private string BuildListQueryUriParameters(string[]? fields,
+                                                   string? filterFormula,
                                                    int? maxRecords,
                                                    int? pageSize,
-                                                   dynamic[] sort,
-                                                   string view,
-                                                   string cellFormat,
-                                                   string timeZone,
-                                                   string userLocale,
-                                                   string offset)
+                                                   dynamic[]? sort,
+                                                   string? view,
+                                                   string? cellFormat,
+                                                   string? timeZone,
+                                                   string? userLocale,
+                                                   string? offset)
         {
-            List<string> parameters = new List<string>();
+            var parameters = new List<string>();
 
-            foreach (string field in fields)
-                parameters.Add(Uri.EscapeDataString($"fields[]={field}"));
+            if (!(fields is null))
+            {
+                foreach (string field in fields)
+                    parameters.Add(Uri.EscapeDataString($"fields[]={field}"));
+            }
+
             if (!String.IsNullOrEmpty(filterFormula))
                 parameters.Add(Uri.EscapeDataString($"filterByFormula=({filterFormula})"));
+            
             if (maxRecords.HasValue)
                 parameters.Add(Uri.EscapeDataString($"maxRecords={maxRecords}"));
+            
             if (pageSize.HasValue)
                 parameters.Add(Uri.EscapeDataString($"pageSize={pageSize}"));
+            
             int sortNum = 0;
-            foreach (var sortField in sort)
+            
+            if (!(sort is null))
             {
-                parameters.Add(Uri.EscapeDataString($"sort[{sortNum}][field]={sortField.Field}"));
-                if (sortField.Direction != null)
-                    parameters.Add(Uri.EscapeDataString($"sort[{sortNum}][direction]={sortField.Direction}"));
-                sortNum++;
+                foreach (var sortField in sort)
+                {
+                    parameters.Add(Uri.EscapeDataString($"sort[{sortNum}][field]={sortField.Field}"));
+                    if (sortField.Direction != null)
+                        parameters.Add(Uri.EscapeDataString($"sort[{sortNum}][direction]={sortField.Direction}"));
+                    sortNum++;
+                }
             }
+
             if (!String.IsNullOrEmpty(view))
                 parameters.Add(Uri.EscapeDataString($"view={view}"));
+            
             if (!String.IsNullOrEmpty(cellFormat))
                 parameters.Add(Uri.EscapeDataString($"cellFormat={cellFormat}"));
+            
             if (!String.IsNullOrEmpty(timeZone))
                 parameters.Add(Uri.EscapeDataString($"timeZone={timeZone}"));
+
             if (!String.IsNullOrEmpty(userLocale))
                 parameters.Add(Uri.EscapeDataString($"userLocale={userLocale}"));
+
             if (!String.IsNullOrEmpty(offset))
                 parameters.Add(Uri.EscapeDataString($"offset={offset}"));
 
             return String.Join("&", parameters);
         }
 
-        private AirtableRecord ConvertAirtableFieldsValueObjects(AirtableRecord record, string[] attachmentFields = null,
-            string[] barcodeFields = null, string[] collaboratorFields = null) =>
-            ConvertAirtableFieldsValueObjects(new List<AirtableRecord> { record }, attachmentFields, barcodeFields, collaboratorFields)
-                .SingleOrDefault();
+        [return: MaybeNull]
+        private AirtableRecord ConvertAirtableFieldValuesToPocos(AirtableRecord record,
+            IEnumerable<(AirtableFieldValuePoco ObjectType, string[] FieldNames)>? conversionPairs) =>
+            ConvertAirtableFieldValuesToPocos(new List<AirtableRecord> { record }, conversionPairs).SingleOrDefault();
 
-        private List<AirtableRecord> ConvertAirtableFieldsValueObjects(List<AirtableRecord> records, string[] attachmentFields = null,
-            string[] barcodeFields = null, string[] collaboratorFields = null)
+        [return: MaybeNull]
+        private List<AirtableRecord> ConvertAirtableFieldValuesToPocos(IEnumerable<AirtableRecord> records,
+            IEnumerable<(AirtableFieldValuePoco ObjectType, string[] FieldNames)>? conversionPairs)
         {
-            if (records?.Any() != true || (attachmentFields == null && barcodeFields == null && collaboratorFields == null))
-                return records;
+            if (records is null) throw new ArgumentNullException(nameof(records));
+
+            if (!records.Any() || conversionPairs?.Any() == false) return records.ToList();
 
             var returnList = new List<AirtableRecord>();
             foreach (AirtableRecord record in records)
             {
                 if (record.Fields?.Any() == true)
                 {
-                    if (attachmentFields != null)
+                    foreach ((AirtableFieldValuePoco ObjectType, string[] FieldNames) in conversionPairs!)
                     {
-                        //var attachments = new List<AirtableAttachment>();
-                        foreach (var field in attachmentFields)
+                        if (FieldNames is null || FieldNames.Length == 0)
+                            break;
+
+                        AirtableFieldsDictionary? fields;
+
+                        switch (ObjectType)
                         {
-                            record.Fields = record.Fields.ValuesTo<AirtableAttachment>(field);
+                            case AirtableFieldValuePoco.Attachment:
+                                fields = record.Fields.ValuesTo<AirtableAttachment>(FieldNames);
+                                break;
+                            case AirtableFieldValuePoco.Barcode:
+                                fields = record.Fields.ValuesTo<AirtableBarcode>(FieldNames);
+                                break;
+                            case AirtableFieldValuePoco.Collaborator:
+                                fields = record.Fields.ValuesTo<AirtableCollaborator>(FieldNames);
+                                break;
+                            default:
+                                return null!;
                         }
-                    }
-                    if (barcodeFields != null)
-                    {
-                        record.Fields = record.Fields.ValuesTo<AirtableBarcode>(attachmentFields);
-                    }
-                    if (collaboratorFields != null)
-                    {
-                        record.Fields = record.Fields.ValuesTo<AirtableCollaborator>(attachmentFields);
+
+                        if (fields is null)
+                        {
+                            //Log error
+                            return null!;
+                        }
+
+                        record.Fields = fields;
                     }
                 }
                 returnList.Add(record);
             }
             return returnList;
         }
+
         #endregion ======= Private methods =======
     }
 }

@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace Airtable.ApiClient.Attributes
+namespace Airtable.ApiClient.Entities
 {
     public class AirtableRecord : IEquatable<AirtableRecord>, IValidatableObject
     {

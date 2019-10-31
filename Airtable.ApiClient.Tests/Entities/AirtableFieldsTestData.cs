@@ -1,8 +1,6 @@
-﻿using Airtable.ApiClient.Attributes;
+﻿using Airtable.ApiClient.Entities;
 using Newtonsoft.Json;
-using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Airtable.ApiClient.Tests.Entities
 {

@@ -1,7 +1,4 @@
-﻿using Airtable.ApiClient.Attributes;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 
 namespace Airtable.ApiClient.Tests.Extensions
 {

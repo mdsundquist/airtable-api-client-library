@@ -1,4 +1,4 @@
-using Airtable.ApiClient.Attributes;
+using Airtable.ApiClient.Entities;
 using Airtable.ApiClient.Extensions;
 using Moq;
 using System;

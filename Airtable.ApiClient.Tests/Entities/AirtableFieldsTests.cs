@@ -1,9 +1,7 @@
-using Airtable.ApiClient.Attributes;
+using Airtable.ApiClient.Entities;
 using Moq;
 using Newtonsoft.Json;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
@@ -34,7 +32,7 @@ namespace Airtable.ApiClient.Tests.Entities
 
         #region ChangesFrom() tests
         [Theory] //(DisplayName = "ChangesFrom: null comparison")]
-        [MemberData(nameof(AirtableFieldsTestData.SingleWithAnonValues), 
+        [MemberData(nameof(AirtableFieldsTestData.SingleWithAnonValues),
             MemberType = typeof(AirtableFieldsTestData))]
         public void ChangesFrom_OldObjectIsNull_ReturnsAllPairs(AirtableFieldsDictionary fields)
         {
